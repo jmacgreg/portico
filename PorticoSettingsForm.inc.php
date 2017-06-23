@@ -33,7 +33,7 @@ class PorticoSettingsForm extends Form {
 		$this->journalId = $journalId;
 		$this->plugin =& $plugin;
 
-		parent::Form($plugin->getTemplatePath() . 'settingsForm.tpl');
+		parent::__construct($plugin->getTemplatePath() . 'settingsForm.tpl');
 
 		$this->addCheck(new FormValidator($this, 'porticoHost', 'required', 'plugins.importexport.portico.manager.settings.porticoHostRequired'));
 

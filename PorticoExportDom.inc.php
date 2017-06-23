@@ -21,9 +21,6 @@ define('PUBMED_DTD_ID', '-//NLM//DTD Journal Publishing DTD v3.0 20080202//EN');
 class PorticoExportDom {
 	function &generateArticleDom(&$doc, &$journal, &$issue, &$section, &$article) {
 
-		// register the editor submission DAO for use later
-		$editorSubmissionDao =& DAORegistry::getDAO('EditorSubmissionDAO');
-
 		/* --- Article --- */
 		$root =& XMLCustomWriter::createElement($doc, 'article');
 		XMLCustomWriter::setAttribute($root, 'xmlns:xlink', 'http://www.w3.org/1999/xlink');
@@ -46,7 +43,7 @@ class PorticoExportDom {
 		XMLCustomWriter::appendChild($journalMetaNode, $journalTitleGroupNode);
 
 		// journal-title
-		XMLCustomWriter::createChildWithText($doc, $journalTitleGroupNode, 'journal-title', $journal->getLocalizedTitle());
+		XMLCustomWriter::createChildWithText($doc, $journalTitleGroupNode, 'journal-title', $journal->getLocalizedPageHeaderTitle());
 
 		// issn
 		if ($journal->getSetting('printIssn') != '') $ISSN = $journal->getSetting('printIssn');
@@ -72,7 +69,7 @@ class PorticoExportDom {
 		XMLCustomWriter::appendChild($articleNode, $articleMetaNode);
 		
 		// article-id (DOI)
-		if ($doi = $article->getPubId('doi')) {
+		if ($doi = $article->getStoredPubId('doi')) {
 			$doiNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'article-id', $doi, false);
 			XMLCustomWriter::setAttribute($doiNode, 'pub-id-type', 'doi');
 			
@@ -131,7 +128,7 @@ class PorticoExportDom {
 		// how this is handled is journal-specific, and will require either
 		// configuration in the plugin, or an update to the core code.
 		// this is also related to DOI-handling within OJS
-		if ($article->getPubId('publisher-id')) {
+		if ($article->getStoredPubId('publisher-id')) {
 			$articleIdListNode =& XMLCustomWriter::createElement($doc, 'ArticleIdList');
 			XMLCustomWriter::appendChild($articleNode, $articleIdListNode);
 
@@ -140,41 +137,23 @@ class PorticoExportDom {
 		}
 
 		// supplementary file links
-		foreach ($article->getSuppFiles() as $suppFile) {
+		$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+		$genreDao =& DAORegistry::getDAO('GenreDAO');
+		$suppFiles= $galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray();
+		
+		foreach ($suppFiles as $suppFile) {
 			$supplementaryMaterialNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'supplementary-material');
-			XMLCustomWriter::setAttribute($supplementaryMaterialNode, 'xlink:href', $suppFile->getFileName());
+			XMLCustomWriter::setAttribute($supplementaryMaterialNode, 'xlink:href', $suppFile->getLocalizedName());
 			XMLCustomWriter::setAttribute($supplementaryMaterialNode, 'content-type', $suppFile->getFileType());
-			}
+		}
 
 		// galley links
-		import('classes.file.ArticleFileManager');
-		$articleFileManager = new ArticleFileManager($article->getId());
-		foreach ($article->getGalleys() as $galley) {
-			$selfUriNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'self-uri', $galley->getFileName());
-			XMLCustomWriter::setAttribute($selfUriNode, 'xlink:href', $galley->getFileName());
+		import('lib.pkp.classes.file.SubmissionFileManager');
+		$submissionFileManager = new SubmissionFileManager($article->getContextId(),$article->getId());
+			foreach ($galleys as $galley) {
+			$selfUriNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'self-uri', $galley->getName($galley->getLocale()));
+			XMLCustomWriter::setAttribute($selfUriNode, 'xlink:href', $galley->getName($galley->getLocale()));
 			XMLCustomWriter::setAttribute($selfUriNode, 'content-type', $galley->getFileType());
-			
-			// check for HTML-ness, and if there are additional galley files include them 
-			$isHtml = $galley->isHTMLGalley();
-	
-			if ($isHtml) {
-				$styleFile = $galley->getStyleFile();
-				if ($styleFile) {
-					$styleNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'related-object');
-					XMLCustomWriter::setAttribute($styleNode, 'xlink:href', $styleFile->getFileName());
-					XMLCustomWriter::setAttribute($styleNode, 'content-type', $styleFile->getFileType());
-					$objectNode =& XMLCustomWriter::createChildWithText($doc, $styleNode, 'object-id', $styleFile->getFileName());
-				}
-				
-				foreach ($galley->getImageFiles() as $imageFile) {
-					
-					$imageNode =& XMLCustomWriter::createChildWithText($doc, $articleMetaNode, 'graphic');
-					XMLCustomWriter::setAttribute($imageNode, 'xlink:href', $imageFile->getFileName());
-					XMLCustomWriter::setAttribute($imageNode, 'content-type', $imageFile->getFileType());
-					$objectNode =& XMLCustomWriter::createChildWithText($doc, $imageNode, 'object-id', $imageFile->getFileName());
-				}
-	
-			}
 		}
 			
 		/* --- Abstract --- */

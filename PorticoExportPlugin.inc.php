@@ -13,7 +13,7 @@
  * @brief Portico export plugin
  */
 
-import('classes.plugins.ImportExportPlugin');
+import('lib.pkp.classes.plugins.ImportExportPlugin');
 
 import('lib.pkp.classes.xml.XMLCustomWriter');
 
@@ -118,7 +118,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		if ($journal->getLocalizedSetting("abbreviation")) {
 			$templateMgr->assign('abbreviation', $journal->getLocalizedSetting("abbreviation"));
 		}
-		
+
 		switch (array_shift($args)) {
 			case 'exportIssues':
 				if ($request->getUserVar('export') == 'download') {
@@ -126,7 +126,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 					if (!isset($issueIds)) $issueIds = array();
 					$issues = array();
 					foreach ($issueIds as $issueId) {
-						$issue =& $issueDao->getIssueById($issueId, $journal->getId());
+						$issue =& $issueDao->getById($issueId, $journal->getId());
 						if (!$issue) $request->redirect();
 						$issues[] =& $issue;
 						unset($issue);
@@ -139,7 +139,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 					if (!isset($issueIds)) $issueIds = array();
 					$issues = array();
 					foreach ($issueIds as $issueId) {
-						$issue =& $issueDao->getIssueById($issueId, $journal->getId());
+						$issue =& $issueDao->getById($issueId, $journal->getId());
 						if (!$issue) $request->redirect();
 						$issues[] =& $issue;
 						unset($issue);
@@ -147,10 +147,9 @@ class PorticoExportPlugin extends ImportExportPlugin {
 					$this->ftpIssues($journal, $issues);
 					break;
 				}
-				
 			case 'exportIssue':
 				$issueId = array_shift($args);
-				$issue =& $issueDao->getIssueById($issueId, $journal->getId());
+				$issue =& $issueDao->getById($issueId, $journal->getId());
 				if (!$issue) $request->redirect();
 				$this->exportIssue($journal, $issue);
 				break;
@@ -168,7 +167,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 				break;
 			case 'ftpIssue':
 				$issueId = array_shift($args);
-				$issue =& $issueDao->getIssueById($issueId, $journal->getId());
+				$issue =& $issueDao->getById($issueId, $journal->getId());
 				if (!$issue) $request->redirect();
 				$this->ftpIssue($journal, $issue);
 				break;
@@ -177,10 +176,13 @@ class PorticoExportPlugin extends ImportExportPlugin {
 				$this->setBreadcrumbs(array(), true);
 				AppLocale::requireComponents(LOCALE_COMPONENT_OJS_EDITOR);
 				$issueDao =& DAORegistry::getDAO('IssueDAO');
-				$issues =& $issueDao->getIssues($journal->getId(), Handler::getRangeInfo('issues'));
+				$issues =& $issueDao->getIssues($journal->getId(), Handler::getRangeInfo($request,'issues'));
 
 				$templateMgr->assign_by_ref('issues', $issues);
 				$templateMgr->display($this->getTemplatePath() . 'issues.tpl');
+				break;
+			case 'settings':
+				$this->manage('settings', $args, $message, $messageParams = array());
 				break;
 			default:
 				$this->setBreadcrumbs();
@@ -202,98 +204,70 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		$sectionDao =& DAORegistry::getDAO('SectionDAO');
 		$publishedArticleDao =& DAORegistry::getDAO('PublishedArticleDAO');
 
-		foreach ($issues as $issue) {				
-			// add article XML
+		foreach ($issues as $issue) {		
+			// add submission XML
 			foreach ($publishedArticleDao->getPublishedArticles($issue->getId()) as $article) {
 				$articlePathName = $article->getId() . '/' . $article->getId() . ".xml";
-				$section = $sectionDao->getSection($article->getSectionId());
+				$section = $sectionDao->getById($article->getSectionId());
 				$doc =& XMLCustomWriter::createDocument('article', PUBMED_DTD_ID, PUBMED_DTD_URL);
 				$articleNode =& PorticoExportDom::generateArticleDom($doc, $journal, $issue, $section, $article);
 				XMLCustomWriter::appendChild($doc, $articleNode);
 				$zip->addFromString($articlePathName, XMLCustomWriter::getXML($doc));
-			
+								
 				// add galleys
-				import('classes.file.ArticleFileManager');
-				$articleFileManager = new ArticleFileManager($article->getId());
-				foreach ($article->getGalleys() as $galley) {
-					$galleyId = $galley->getId();
+				import('lib.pkp.classes.file.SubmissionFileManager');
+				$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
 				
-					$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+				foreach ($galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray() as $galley) {
+					$galleyId = $galley->getId();
+
 					if ($journal->getSetting('enablePublicGalleyId')) {
-						$galley =& $galleyDao->getGalleyByBestGalleyId($galleyId, $article->getId());
+						$galley =& $galleyDao->getByBestGalleyId($galleyId, $article->getId());
 					} else {
-						$galley =& $galleyDao->getGalley($galleyId, $article->getId());
+						$galley =& $galleyDao->getById($galleyId, $article->getId());
 					}
 
 					if ($article && $galley) {
-						$articleFileDao =& DAORegistry::getDAO('ArticleFileDAO');
-						$articleFile =& $articleFileDao->getArticleFile($galley->getFileId(), null, $article->getId());
+						$submissionFileDAO =& DAORegistry::getDAO('SubmissionFileDAO');
+						$submissionFile =& $submissionFileDAO->getByPubId($galley->getFileId(), null, $article->getId());
 				
-						if (isset($articleFile)) {
-							$fileType = $articleFile->getFileType();
-							$filePath = $articleFile->getFilePath();
+						if (isset($submissionFile)) {
+							$fileType = $submissionFile->getFileType();
+							$filePath = $submissionFile->getFilePath();
 							if(file_exists($filePath))
 							{
-								$filename = $articleFile->getFileName();
+								$filename = $submissionFile->getName(null);
 								$zip->addFile($filePath, $article->getId() . '/' . $filename);
 							}
-						}
-						
-						// add additional HTML files
-						$isHtml = $galley->isHTMLGalley();
-						
-						if ($isHtml) {
-							$styleFile = $galley->getStyleFile();
-							if ($styleFile) {
-								if (isset($styleFile)) {
-									$styleFileType = $styleFile->getFileType();
-									$styleFilePath = $styleFile->getFilePath();
-									if(file_exists($styleFilePath)) {
-										$styleFilename = $styleFile->getFileName();
-										$zip->addFile($styleFilePath, $article->getId() . '/' . $styleFilename);
-									}
-								}
-							}
-							
-							foreach ($galley->getImageFiles() as $imageFile) {
-								if (isset($imageFile)) {
-									$imageFileType = $imageFile->getFileType();
-									$imageFilePath = $imageFile->getFilePath();
-									if(file_exists($imageFilePath)) {
-										$imageFilename = $imageFile->getFileName();
-										$zip->addFile($imageFilePath, $article->getId() . '/' . $imageFilename);	
-									}
-								}
-							}	
 						}
 					}
 				}
 			
 				// add Supplementary Files
-				$article_suppfiles = $article->getSuppFiles();
-		
-				foreach ($article_suppfiles as $key => $sup) {
-					$suppId = $sup->getId();
-					$suppFileDao =& DAORegistry::getDAO('SuppFileDAO');
-					if ($journal->getSetting('enablePublicSuppFileId')) {
-						$suppFile =& $suppFileDao->getSuppFileByBestSuppFileId($article->getId(), $suppId);
+				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+				$genreDao =& DAORegistry::getDAO('GenreDAO');
+				$suppFiles = $galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray();
+
+				foreach ($suppFiles as $sup) {
+					$suppId = $sup->getFileId();
+					$suppFileDao =& DAORegistry::getDAO('SubmissionFileDAO');
+					
+					if ($journal->getSetting('rtSupplementaryFiles')) {
+						$suppFile =& $suppFileDao->getLatestRevision((int) $suppId, null, $article->getId());
 					} else {
-						$suppFile =& $suppFileDao->getSuppFile((int) $suppId, $article->getId());
+						$suppFile =& $suppFileDao->getByBestId((int) $suppId, $article->getId());
 					}
-			
 					if ($article && $suppFile) {
-						import('classes.file.ArticleFileManager');
-						$articleFileManager = new ArticleFileManager($article->getId());
-			
-						$suppFileName = $article->getBestArticleId($journal).'-SUP'.($suppFile->getSequence()+1);
-			
-						$articleFile =& $articleFileManager->getFile($suppFile->getFileId(),null,false,$suppFileName);
-			
+						import('lib.pkp.classes.file.SubmissionFileManager');
+						$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+						
+						$articleFile =& $submissionFileManager->_getFile($suppFile->getFileId());
 						if (isset($articleFile)) {
 							$fileType = $articleFile->getFileType();
 							$filePath = $articleFile->getFilePath();
 							if(file_exists($filePath)) {
-								$filename = $suppFile->getFileName();
+								$filename = $suppFile->getOriginalFileName();
 								$zip->addFile($filePath, $article->getId() . '/' . $filename);
 							}
 						}
@@ -333,97 +307,69 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		$publishedArticleDao =& DAORegistry::getDAO('PublishedArticleDAO');
 		$sectionDao =& DAORegistry::getDAO('SectionDAO');
 		
-		// add article XML
+		// add submission XML
 		foreach ($publishedArticleDao->getPublishedArticles($issue->getId()) as $article) {
 			$articlePathName = $article->getId() . '/' . $article->getId() . ".xml";
-			$section = $sectionDao->getSection($article->getSectionId());
+			$section = $sectionDao->getById($article->getSectionId());
 			$doc =& XMLCustomWriter::createDocument('article', PUBMED_DTD_ID, PUBMED_DTD_URL);
 			$articleNode =& PorticoExportDom::generateArticleDom($doc, $journal, $issue, $section, $article);
 			XMLCustomWriter::appendChild($doc, $articleNode);
 			$zip->addFromString($articlePathName, XMLCustomWriter::getXML($doc));
 			
 			// add galleys
-			import('classes.file.ArticleFileManager');
-			$articleFileManager = new ArticleFileManager($article->getId());
-			foreach ($article->getGalleys() as $galley) {
+			import('lib.pkp.classes.file.SubmissionFileManager');
+			$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+			$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+			
+			foreach ($galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray() as $galley) {
 				$galleyId = $galley->getId();
 				
-				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
 				if ($journal->getSetting('enablePublicGalleyId')) {
-					$galley =& $galleyDao->getGalleyByBestGalleyId($galleyId, $article->getId());
+					$galley =& $galleyDao->getByBestGalleyId($galleyId, $article->getId());
 				} else {
-					$galley =& $galleyDao->getGalley($galleyId, $article->getId());
+					$galley =& $galleyDao->getById($galleyId, $article->getId());
 				}
 
 				if ($article && $galley) {
-					$articleFileDao =& DAORegistry::getDAO('ArticleFileDAO');
-					$articleFile =& $articleFileDao->getArticleFile($galley->getFileId(), null, $article->getId());
+					$submissionFileDAO =& DAORegistry::getDAO('SubmissionFileDAO');
+					$submissionFile =& $submissionFileDAO->getByPubId($galley->getFileId(), null, $article->getId());
 				
-					if (isset($articleFile)) {
-						$fileType = $articleFile->getFileType();
-						$filePath = $articleFile->getFilePath();
+					if (isset($submissionFile)) {
+						$fileType = $submissionFile->getFileType();
+						$filePath = $submissionFile->getFilePath();
 						if(file_exists($filePath))
 						{
-							$filename = $articleFile->getFileName();
+							$filename = $submissionFile->getName(null);
 							$zip->addFile($filePath, $article->getId() . '/' . $filename);
-						}
-						
-						// add additional HTML files
-						$isHtml = $galley->isHTMLGalley();
-						
-						if ($isHtml) {
-							$styleFile = $galley->getStyleFile();
-							if ($styleFile) {
-								if (isset($styleFile)) {
-									$styleFileType = $styleFile->getFileType();
-									$styleFilePath = $styleFile->getFilePath();
-									if(file_exists($styleFilePath)) {
-										$styleFilename = $styleFile->getFileName();
-										$zip->addFile($styleFilePath, $article->getId() . '/' . $styleFilename);
-									}
-								}
-							}
-							
-							foreach ($galley->getImageFiles() as $imageFile) {
-								if (isset($imageFile)) {
-									$imageFileType = $imageFile->getFileType();
-									$imageFilePath = $imageFile->getFilePath();
-									if(file_exists($imageFilePath)) {
-										$imageFilename = $imageFile->getFileName();
-										$zip->addFile($imageFilePath, $article->getId() . '/' . $imageFilename);
-									}
-								}
-							}	
 						}
 					}
 				}
 			}
 			
 			// add Supplementary Files
-			$article_suppfiles = $article->getSuppFiles();
-		
-			foreach ($article_suppfiles as $key => $sup) {
-				$suppId = $sup->getId();
-				$suppFileDao =& DAORegistry::getDAO('SuppFileDAO');
-				if ($journal->getSetting('enablePublicSuppFileId')) {
-					$suppFile =& $suppFileDao->getSuppFileByBestSuppFileId($article->getId(), $suppId);
+			$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+			$suppFiles = $galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray();
+			
+			foreach ($suppFiles as $sup) {
+				$suppId = $sup->getFileId();
+				$suppFileDao =& DAORegistry::getDAO('SubmissionFileDAO');
+				
+				if ($journal->getSetting('rtSupplementaryFiles')) {
+					$suppFile =& $suppFileDao->getLatestRevision((int) $suppId, null, $article->getId());
 				} else {
-					$suppFile =& $suppFileDao->getSuppFile((int) $suppId, $article->getId());
+					$suppFile =& $suppFileDao->getByBestId((int) $suppId, $article->getId());
 				}
-			
+				
 				if ($article && $suppFile) {
-					import('classes.file.ArticleFileManager');
-					$articleFileManager = new ArticleFileManager($article->getId());
-			
-					$suppFileName = $article->getBestArticleId($journal).'-SUP'.($suppFile->getSequence()+1);
-			
-					$articleFile =& $articleFileManager->getFile($suppFile->getFileId(),null,false,$suppFileName);
-			
+					import('lib.pkp.classes.file.SubmissionFileManager');
+					$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+					
+					$articleFile =& $submissionFileManager->_getFile($suppFile->getFileId());
 					if (isset($articleFile)) {
 						$fileType = $articleFile->getFileType();
 						$filePath = $articleFile->getFilePath();
 						if(file_exists($filePath)) {
-							$filename = $suppFile->getFileName();
+							$filename = $suppFile->getOriginalFileName();
 							$zip->addFile($filePath, $article->getId() . '/' . $filename);
 						}
 					}
@@ -431,7 +377,6 @@ class PorticoExportPlugin extends ImportExportPlugin {
 			}
 		}
 		$zip->close();
-
 		header('Content-Type: application/zip');
 		header('Content-disposition: attachment; filename=' . $zipName);
 		header('Content-Length: ' . filesize($zipName));
@@ -469,38 +414,39 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		$publishedArticleDao =& DAORegistry::getDAO('PublishedArticleDAO');
 		$sectionDao =& DAORegistry::getDAO('SectionDAO');
 		
-		// add article XML
+		// add submission XML
 		foreach ($publishedArticleDao->getPublishedArticles($issue->getId()) as $article) {
 			$articlePathName = $article->getId() . '/' . $article->getId() . ".xml";
-			$section = $sectionDao->getSection($article->getSectionId());
+			$section = $sectionDao->getById($article->getSectionId());
 			$doc =& XMLCustomWriter::createDocument('article', PUBMED_DTD_ID, PUBMED_DTD_URL);
 			$articleNode =& PorticoExportDom::generateArticleDom($doc, $journal, $issue, $section, $article);
 			XMLCustomWriter::appendChild($doc, $articleNode);
 			$zip->addFromString($articlePathName, XMLCustomWriter::getXML($doc));
 			
 			// add galleys
-			import('classes.file.ArticleFileManager');
-			$articleFileManager = new ArticleFileManager($article->getId());
+			import('lib.pkp.classes.file.SubmissionFileManager');
+			$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+			$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+			
 			foreach ($article->getGalleys() as $galley) {
 				$galleyId = $galley->getId();
 				
-				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
 				if ($journal->getSetting('enablePublicGalleyId')) {
-					$galley =& $galleyDao->getGalleyByBestGalleyId($galleyId, $article->getId());
+					$galley =& $galleyDao->getByBestGalleyId($galleyId, $article->getId());
 				} else {
-					$galley =& $galleyDao->getGalley($galleyId, $article->getId());
+					$galley =& $galleyDao->getById($galleyId, $article->getId());
 				}
 
 				if ($article && $galley) {
-					$articleFileDao =& DAORegistry::getDAO('ArticleFileDAO');
-					$articleFile =& $articleFileDao->getArticleFile($galley->getFileId(), null, $article->getId());
-				
-					if (isset($articleFile)) {
-						$fileType = $articleFile->getFileType();
-						$filePath = $articleFile->getFilePath();
+					$submissionFileDAO =& DAORegistry::getDAO('SubmissionFileDAO');
+					$submissionFile =& $submissionFileDAO->getByPubId($galley->getFileId(), null, $article->getId());
+					
+					if (isset($submissionFile)) {
+						$fileType = $submissionFile->getFileType();
+						$filePath = $submissionFile->getFilePath();
 						if(file_exists($filePath))
 						{
-							$filename = $articleFile->getFileName();
+							$filename = $submissionFile->getName(null);
 							$zip->addFile($filePath, $article->getId() . '/' . $filename);
 						}
 					}
@@ -508,30 +454,30 @@ class PorticoExportPlugin extends ImportExportPlugin {
 			}
 			
 			// add Supplementary Files
-			$article_suppfiles = $article->getSuppFiles();
-		
-			foreach ($article_suppfiles as $key => $sup) {
-				$suppId = $sup->getId();
-				$suppFileDao =& DAORegistry::getDAO('SuppFileDAO');
-				if ($journal->getSetting('enablePublicSuppFileId')) {
-					$suppFile =& $suppFileDao->getSuppFileByBestSuppFileId($article->getId(), $suppId);
+			$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+			$genreDao =& DAORegistry::getDAO('GenreDAO');
+			$suppFiles = $galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray();
+			
+			foreach ($suppFiles as $sup) {
+				$suppId = $sup->getFileId();
+				$suppFileDao =& DAORegistry::getDAO('SubmissionFileDAO');
+				
+				if ($journal->getSetting('rtSupplementaryFiles')) {
+					$suppFile =& $suppFileDao->getLatestRevision((int) $suppId, null, $article->getId());
 				} else {
-					$suppFile =& $suppFileDao->getSuppFile((int) $suppId, $article->getId());
+					$suppFile =& $suppFileDao->getByBestId((int) $suppId, $article->getId());
 				}
-			
+				
 				if ($article && $suppFile) {
-					import('classes.file.ArticleFileManager');
-					$articleFileManager = new ArticleFileManager($article->getId());
-			
-					$suppFileName = $article->getBestArticleId($journal).'-SUP'.($suppFile->getSequence()+1);
-			
-					$articleFile =& $articleFileManager->getFile($suppFile->getFileId(),null,false,$suppFileName);
-			
+					import('lib.pkp.classes.file.SubmissionFileManager');
+					$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+					
+					$articleFile =& $submissionFileManager->_getFile($suppFile->getFileId());
 					if (isset($articleFile)) {
 						$fileType = $articleFile->getFileType();
 						$filePath = $articleFile->getFilePath();
 						if(file_exists($filePath)) {
-							$filename = $suppFile->getFileName();
+							$filename = $suppFile->getOriginalFileName();
 							$zip->addFile($filePath, $article->getId() . '/' . $filename);
 						}
 					}
@@ -584,39 +530,40 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		$sectionDao =& DAORegistry::getDAO('SectionDAO');
 		$publishedArticleDao =& DAORegistry::getDAO('PublishedArticleDAO');
 
-		foreach ($issues as $issue) {				
-			// add article XML
+		foreach ($issues as $issue) {
+			// add submission XML
 			foreach ($publishedArticleDao->getPublishedArticles($issue->getId()) as $article) {
 				$articlePathName = $article->getId() . '/' . $article->getId() . ".xml";
-				$section = $sectionDao->getSection($article->getSectionId());
+				$section = $sectionDao->getById($article->getSectionId());
 				$doc =& XMLCustomWriter::createDocument('article', PUBMED_DTD_ID, PUBMED_DTD_URL);
 				$articleNode =& PorticoExportDom::generateArticleDom($doc, $journal, $issue, $section, $article);
 				XMLCustomWriter::appendChild($doc, $articleNode);
 				$zip->addFromString($articlePathName, XMLCustomWriter::getXML($doc));
 			
 				// add galleys
-				import('classes.file.ArticleFileManager');
-				$articleFileManager = new ArticleFileManager($article->getId());
-				foreach ($article->getGalleys() as $galley) {
-					$galleyId = $galley->getId();
+				import('lib.pkp.classes.file.SubmissionFileManager');
+				$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
 				
-					$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+				foreach ($galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray() as $galley) {
+					$galleyId = $galley->getId();
+					
 					if ($journal->getSetting('enablePublicGalleyId')) {
-						$galley =& $galleyDao->getGalleyByBestGalleyId($galleyId, $article->getId());
+						$galley =& $galleyDao->getByBestGalleyId($galleyId, $article->getId());
 					} else {
-						$galley =& $galleyDao->getGalley($galleyId, $article->getId());
+						$galley =& $galleyDao->getById($galleyId, $article->getId());
 					}
 
 					if ($article && $galley) {
-						$articleFileDao =& DAORegistry::getDAO('ArticleFileDAO');
-						$articleFile =& $articleFileDao->getArticleFile($galley->getFileId(), null, $article->getId());
+						$submissionFileDAO =& DAORegistry::getDAO('SubmissionFileDAO');
+						$submissionFile =& $submissionFileDAO->getByPubId($galley->getFileId(), null, $article->getId());
 				
-						if (isset($articleFile)) {
-							$fileType = $articleFile->getFileType();
-							$filePath = $articleFile->getFilePath();
+						if (isset($submissionFile)) {
+							$fileType = $submissionFile->getFileType();
+							$filePath = $submissionFile->getFilePath();
 							if(file_exists($filePath))
 							{
-								$filename = $articleFile->getFileName();
+								$filename = $submissionFile->getName(null);
 								$zip->addFile($filePath, $article->getId() . '/' . $filename);
 							}
 						}
@@ -624,30 +571,30 @@ class PorticoExportPlugin extends ImportExportPlugin {
 				}
 			
 				// add Supplementary Files
-				$article_suppfiles = $article->getSuppFiles();
-		
-				foreach ($article_suppfiles as $key => $sup) {
-					$suppId = $sup->getId();
-					$suppFileDao =& DAORegistry::getDAO('SuppFileDAO');
-					if ($journal->getSetting('enablePublicSuppFileId')) {
-						$suppFile =& $suppFileDao->getSuppFileByBestSuppFileId($article->getId(), $suppId);
+				$galleyDao =& DAORegistry::getDAO('ArticleGalleyDAO');
+				$genreDao =& DAORegistry::getDAO('GenreDAO');
+				$suppFiles = $galleyDao->getBySubmissionId($article->getId(), $article->getContextId())->toArray();
+				
+				foreach ($suppFiles as $sup) {
+					$suppId = $sup->getFileId();
+					$suppFileDao =& DAORegistry::getDAO('SubmissionFileDAO');
+					
+					if ($journal->getSetting('rtSupplementaryFiles')) {
+						$suppFile =& $suppFileDao->getLatestRevision((int) $suppId, null, $article->getId());
 					} else {
-						$suppFile =& $suppFileDao->getSuppFile((int) $suppId, $article->getId());
+						$suppFile =& $suppFileDao->getByBestId((int) $suppId, $article->getId());
 					}
-			
+					
 					if ($article && $suppFile) {
-						import('classes.file.ArticleFileManager');
-						$articleFileManager = new ArticleFileManager($article->getId());
-			
-						$suppFileName = $article->getBestArticleId($journal).'-SUP'.($suppFile->getSequence()+1);
-			
-						$articleFile =& $articleFileManager->getFile($suppFile->getFileId(),null,false,$suppFileName);
-			
+						import('lib.pkp.classes.file.SubmissionFileManager');
+						$submissionFileManager = new SubmissionFileManager($article->getContextId(), $article->getId());
+						
+						$articleFile =& $submissionFileManager->_getFile($suppFile->getFileId());
 						if (isset($articleFile)) {
 							$fileType = $articleFile->getFileType();
 							$filePath = $articleFile->getFilePath();
 							if(file_exists($filePath)) {
-								$filename = $suppFile->getFileName();
+								$filename = $suppFile->getOriginalFileName();
 								$zip->addFile($filePath, $article->getId() . '/' . $filename);
 							}
 						}
@@ -658,29 +605,29 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		$zip->close();
 				
 		// set up basic connection 
-		$conn_id = ftp_connect($ftp_server); 
+		$conn_id = ftp_connect($ftp_server);
 
 		// login with username and password 
-		$login_result = ftp_login($conn_id, $ftp_user_name, $ftp_user_pass); 
+		$login_result = ftp_login($conn_id, $ftp_user_name, $ftp_user_pass);
 		
 		ftp_pasv($conn_id, true);
 
 		// upload a file
 		$templateMgr =& TemplateManager::getManager();
-		if (ftp_put($conn_id, $zipName, $zipName, FTP_BINARY)) { 
+		if (ftp_put($conn_id, $zipName, $zipName, FTP_BINARY)) {
 			return $templateMgr->display($this->getTemplatePath() . 'exportSuccess.tpl');
-			exit; 
-		} else { 
+			exit;
+		} else {
 			return $templateMgr->display($this->getTemplatePath() . 'exportFailure.tpl');
 			exit; 
-		} 
+		}
 		// close the connection 
 		ftp_close($conn_id);
 		unlink($zipName);
 		return true;
 	}
 	
- 	/*
+ 	/**
  	 * Execute a management verb on this plugin
  	 * @param $verb string
  	 * @param $args array
@@ -695,7 +642,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 
 		switch ($verb) {
 			case 'settings':
-				AppLocale::requireComponents(LOCALE_COMPONENT_APPLICATION_COMMON,  LOCALE_COMPONENT_PKP_MANAGER);
+				AppLocale::requireComponents(LOCALE_COMPONENT_APP_COMMON,  LOCALE_COMPONENT_PKP_MANAGER);
 				$templateMgr =& TemplateManager::getManager();
 				$templateMgr->register_function('plugin_url', array(&$this, 'smartyPluginUrl'));
 
@@ -706,7 +653,7 @@ class PorticoExportPlugin extends ImportExportPlugin {
 					$form->readInputData();
 					if ($form->validate()) {
 						$form->execute();
-						Request::redirect(null, null, null, array('importexport', $this->getName(), 'settings'));
+						Request::redirect(null, null, null, array('plugin', $this->getName()));
 					} else {
 						$form->display();
 					}
@@ -730,6 +677,55 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		}
 
 		return $returner;
+	}
+	
+	/////////////////////////Added missing abstract methods/////////////////////////////////////
+	/**
+	 * Set the page's breadcrumbs, given the plugin's tree of items
+	 * to append.
+	 * @param $crumbs Array ($url, $name, $isTranslated)
+	 * @param $subclass boolean
+	 */
+	function setBreadcrumbs($crumbs = array(), $isSubclass = false) {
+		$templateMgr =& TemplateManager::getManager();
+		$pageCrumbs = array(
+				array(
+						Request::url(null, 'user'),
+						'navigation.user'
+				),
+				array(
+						Request::url(null, 'manager'),
+						'user.role.manager'
+				),
+				array (
+						Request::url(null, 'manager', 'importexport'),
+						'manager.importExport'
+				)
+		);
+		if ($isSubclass) $pageCrumbs[] = array(
+				Request::url(null, 'manager', 'importexport', array('plugin', $this->getName())),
+				$this->getDisplayName(),
+				true
+		);
+		
+		$templateMgr->assign('pageHierarchy', array_merge($pageCrumbs, $crumbs));
+	}
+	
+	/**
+	 * Execute import/export tasks using the command-line interface.
+	 * @param $scriptName The name of the command-line script (displayed as usage info)
+	 * @param $args Parameters to the plugin
+	 */
+	function executeCLI($scriptName, &$args){
+		
+	}
+	
+	/**
+	 * Display the command-line usage information
+	 * @param $scriptName string
+	 */
+	function usage($scriptName){
+		
 	}
 }
 

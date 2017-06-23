@@ -20,7 +20,7 @@
 function toggleChecked() {
 	var elements = document.getElementsByName("issueId[]");
 	for (var i=0; i < elements.length; i++) {
-			elements[i].checked = !elements[i].checked;
+			elements[i].checked = true
 	}
 }
 // -->
@@ -38,8 +38,8 @@ function toggleChecked() {
 	<tr class="heading" valign="bottom">
 		<td width="5%">&nbsp;</td>
 		<td width="40%">{translate key="issue.issue"}</td>
-		<td width="15%">{translate key="editor.issues.published"}</td>
-		<td width="15%">{translate key="editor.issues.numArticles"}</td>
+		<td width="15%">{translate key="plugins.importexport.portico.issues.published"}</td>
+		<td width="15%">{translate key="plugins.importexport.portico.issues.numOfArticles"}</td>
 		<td width="25%" align="right">{translate key="common.action"}</td>
 	</tr>
 	<tr>
@@ -52,7 +52,7 @@ function toggleChecked() {
 		<td><a href="{url page="issue" op="view" path=$issue->getId()}" class="action">{$issue->getIssueIdentification()|strip_unsafe_html|nl2br}</a></td>
 		<td>{$issue->getDatePublished()|date_format:"$dateFormatShort"|default:"&mdash;"}</td>
 		<td>{$issue->getNumArticles()|escape}</td>
-		<td align="right"><a href="{plugin_url path="exportIssue"|to_array:$issue->getId()}" class="action">{translate key="common.export"}</a> | <a href="{plugin_url path="ftpIssue"|to_array:$issue->getId()}" class="action">{translate key="plugins.importexport.portico.ftpTransfer"}</a></td>
+		<td align="right"><a href="{plugin_url}exportIssue/{$issue->getId()}" class="action">{translate key="common.export"}</a> | <a href="{plugin_url}ftpIssue/{$issue->getId()}" class="action">{translate key="plugins.importexport.portico.ftpTransfer"}</a></td>
 	</tr>
 	<tr>
 		<td colspan="5" class="{if $issues->eof()}end{/if}separator">&nbsp;</td>
