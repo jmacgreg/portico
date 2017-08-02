@@ -17,7 +17,7 @@
 
 <div class="separator">&nbsp;</div>
 
-<form method="post" action="{plugin_url path="settings"}">
+<form method="post" action="settings">
 {include file="common/formErrors.tpl"}
 
 <h3>{translate key="plugins.importexport.portico.ftpConfig"}</h3>
@@ -30,7 +30,7 @@
 		<td width="20%" class="label">{fieldLabel name="porticoHost" required="true" key="plugins.importexport.portico.porticoHost"}</td>
 		<td width="80%" class="value"><input type="text" name="porticoHost" id="porticoHost" value="{$porticoHost|escape}" size="15" maxlength="25" class="textField" /> <span class="instruct">{translate key="plugins.importexport.portico.porticoHostInstructions"}</span>
 		</td></tr>
-	
+
 	<tr valign="top">
 		<td width="20%" class="label">{fieldLabel name="porticoUsername" required="true" key="plugins.importexport.portico.porticoUsername"}</td>
 		<td width="80%" class="value"><input type="text" name="porticoUsername" id="porticoUsername" value="{$porticoUsername|escape}" size="15" maxlength="25" class="textField" />
@@ -43,7 +43,7 @@
 	</tr>
 </table>
 
-<input type="submit" name="save" class="button defaultButton" value="{translate key="common.save"}"/> <input type="button" class="button" value="{translate key="common.cancel"}" onclick="document.location='{url op="plugin"}';"/>
+<input type="submit" name="save" class="button defaultButton" value="{translate key="common.save"}" /><input type="button" class="button" value="{translate key="common.cancel"}" onclick="document.location='{url|cat:'/plugin/PorticoExportPlugin'}';"/>
 </form>
 </div><!-- porticoSettings -->
 <p><span class="formRequired">{translate key="common.requiredField"}</span></p>

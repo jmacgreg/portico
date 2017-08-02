@@ -47,5 +47,12 @@
 	
 	<message key="plugins.importexport.portico.export.success">Export Successful</message>
 	<message key="plugins.importexport.portico.export.success.description">The FTP export was successful.</message>
+	
+	<message key="plugins.importexport.portico.issues.published">Published</message>
+	<message key="plugins.importexport.portico.issues.numOfArticles">Items</message>
+	
+	<message key="plugins.importexport.portico.manager.settings.porticoHostRequired">Portico Hostname Required</message>
+	<message key="plugins.importexport.portico.manager.settings.porticoUsernameRequired">Portico Username Required</message>
+	<message key="plugins.importexport.portico.manager.settings.porticoPasswordRequired">Portico Password Required</message>
 
 </locale>
