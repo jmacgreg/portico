@@ -28,6 +28,13 @@ class PorticoSettingsForm extends Form {
 	private $fields = ['porticoHost', 'porticoUsername', 'porticoPassword'];
 
 	/**
+	 * @copydoc Plugin::getTemplatePath($inCore)
+	 */
+	function getTemplatePath($inCore = false) {
+		return parent::getTemplatePath($inCore) . 'templates/';
+	}
+
+	/**
 	 * Constructor
 	 * @param $plugin PorticoExportPlugin
 	 * @param $journalId int
@@ -36,7 +43,7 @@ class PorticoSettingsForm extends Form {
 		$this->journalId = $journalId;
 		$this->plugin = $plugin;
 
-		parent::__construct($this->plugin->getTemplateResource('settingsForm.tpl'));
+		parent::__construct($this->plugin->getTemplatePath(). 'settingsForm.tpl');
 
 		foreach($this->fields as $name) {
 			$this->addCheck(new FormValidator($this, $name, 'required', 'plugins.importexport.portico.manager.settings.' . $name . 'Required'));
