@@ -3,8 +3,8 @@
 /**
  * @file plugins/importexport/portico/PorticoSettingsForm.inc.php
  *
- * Copyright (c) 2014-2019 Simon Fraser University
- * Copyright (c) 2003-2019 John Willinsky
+ * Copyright (c) 2014-2020 Simon Fraser University
+ * Copyright (c) 2003-2020 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file LICENSE.
  *
  * @class PorticoSettingsForm
@@ -18,8 +18,8 @@ import('lib.pkp.classes.form.Form');
 
 class PorticoSettingsForm extends Form {
 
-	/** @var $journalId int */
-	private $journalId;
+	/** @var $contextId int */
+	private $contextId;
 
 	/** @var $plugin PorticoExportPlugin */
 	private $plugin;
@@ -30,10 +30,10 @@ class PorticoSettingsForm extends Form {
 	/**
 	 * Constructor
 	 * @param $plugin PorticoExportPlugin
-	 * @param $journalId int
+	 * @param $contextId int
 	 */
-	public function __construct(PorticoExportPlugin $plugin, $journalId) {
-		$this->journalId = $journalId;
+	public function __construct(PorticoExportPlugin $plugin, $contextId) {
+		$this->contextId = $contextId;
 		$this->plugin = $plugin;
 
 		parent::__construct($this->plugin->getTemplateResource('settingsForm.tpl'));
@@ -48,7 +48,7 @@ class PorticoSettingsForm extends Form {
 	 */
 	public function initData() {
 		foreach($this->fields as $name) {
-			$this->setData($name, $this->plugin->getSetting($this->journalId, $name));
+			$this->setData($name, $this->plugin->getSetting($this->contextId, $name));
 		}
 	}
 
@@ -62,9 +62,9 @@ class PorticoSettingsForm extends Form {
 	/**
 	 * @copydoc Form::execute()
 	 */
-	public function execute() {
+	public function execute(...$functionArgs) {
 		foreach($this->fields as $name) {
-			$this->plugin->updateSetting($this->journalId, $name, $this->getData($name));
+			$this->plugin->updateSetting($this->contextId, $name, $this->getData($name));
 		}
 	}
 }
