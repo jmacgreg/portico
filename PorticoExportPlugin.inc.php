@@ -144,14 +144,20 @@ class PorticoExportPlugin extends ImportExportPlugin {
 		}
 		try {
 			$issueDao = DAORegistry::getDAO('IssueDAO');
-			$publishedArticleDao = DAORegistry::getDAO('PublishedArticleDAO');
 			foreach ($issueIds as $issueId) {
 				if (!($issue = $issueDao->getById($issueId, $this->_context->getId()))) {
 					throw new Exception(__('plugins.importexport.portico.export.failure.loadingIssue', ['issueId' => $issueId]));
 				}
 
 				// add submission XML
-				foreach ($publishedArticleDao->getPublishedArticles($issue->getId()) as $article) {
+				$submissions = Services::get('submission')->getMany([
+					'contextId' => $this->_context->getId(),
+					'issueIds' => [$issueId],
+					'status' => [STATUS_PUBLISHED],
+					'orderBy' => 'seq',
+					'orderDirection' => 'ASC',
+				]);
+				foreach ($submissions as $article) {
 					$document = new PorticoExportDom($this->_context, $issue, $article);
 					$articlePathName = $article->getId() . '/' . $article->getId() . '.xml';
 					if (!$zip->addFromString($articlePathName, $document)) {

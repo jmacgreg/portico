@@ -28,7 +28,7 @@ class PorticoExportDom extends XMLCustomWriter {
 	/** @var Issue Issue */
 	private $_issue;
 
-	/** @var PublishedArticle Article */
+	/** @var Submission Submission */
 	private $_article;
 
 	/** @var DOMElement Document node */
@@ -36,11 +36,11 @@ class PorticoExportDom extends XMLCustomWriter {
 
 	/**
 	 * Constructor
-	 * @param Context $journal Journal
-	 * @param Issue $issue Issue
-	 * @param PublishedArticle $article Article
+	 * @param Context $journal
+	 * @param Issue $issue
+	 * @param Submission $article
 	 */
-	public function __construct(Journal $context, Issue $issue, PublishedArticle $article)
+	public function __construct(Journal $context, Issue $issue, Submission $article)
 	{
 		$this->_context = $context;
 		$this->_issue = $issue;
